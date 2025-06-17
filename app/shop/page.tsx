@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
@@ -13,96 +13,34 @@ import { ShoppingCart, Heart, Search, Filter, Star, Grid, List } from "lucide-re
 import { useCart } from "@/hooks/use-cart"
 import { useFavorites } from "@/hooks/use-favorites"
 import { useToast } from "@/hooks/use-toast"
-import { canonEosR5, dell, iPhone14Pro, macBookProM3Max, samsungGalaxyS23Ultra, sonyWh1000xm5 } from "@/lib/constants/image"
+import { productAPI, categoryAPI, isUsingMockData } from "@/lib/api"
 
-const products = [
-  {
-    id: "1",
-    name: "MacBook Pro 16-inch M3 Max",
-    price: 2399.99,
-    originalPrice: 2799.99,
-    brand: "Apple",
-    category: "laptops",
-    image: macBookProM3Max,
-    rating: 4.8,
-    reviews: 124,
-    inStock: 15,
-    discount: 15,
-    featured: true,
-  },
-  {
-    id: "2",
-    name: "iPhone 15 Pro Max 256GB",
-    price: 1199.99,
-    originalPrice: 1299.99,
-    brand: "Apple",
-    category: "phones",
-    image: iPhone14Pro,
-    rating: 4.9,
-    reviews: 89,
-    inStock: 8,
-    discount: 8,
-    featured: true,
-  },
-  {
-    id: "3",
-    name: "Canon EOS R5 Mirrorless Camera",
-    price: 3899.99,
-    originalPrice: 4299.99,
-    brand: "Canon",
-    category: "cameras",
-    image: canonEosR5,
-    rating: 4.7,
-    reviews: 56,
-    inStock: 0,
-    discount: 10,
-    featured: false,
-  },
-  {
-    id: "4",
-    name: "Sony WH-1000XM5 Wireless Headphones",
-    price: 349.99,
-    originalPrice: 399.99,
-    brand: "Sony",
-    category: "audio",
-    image: sonyWh1000xm5,
-    rating: 4.6,
-    reviews: 203,
-    inStock: 25,
-    discount: 12,
-    featured: false,
-  },
-  {
-    id: "5",
-    name: "Dell XPS 13 Plus Laptop",
-    price: 1299.99,
-    originalPrice: 1499.99,
-    brand: "Dell",
-    category: "laptops",
-    image: dell,
-    rating: 4.5,
-    reviews: 78,
-    inStock: 12,
-    discount: 13,
-    featured: false,
-  },
-  {
-    id: "6",
-    name: "Samsung Galaxy S24 Ultra",
-    price: 1099.99,
-    originalPrice: 1199.99,
-    brand: "Samsung",
-    category: "phones",
-    image: samsungGalaxyS23Ultra,
-    rating: 4.7,
-    reviews: 156,
-    inStock: 18,
-    discount: 8,
-    featured: true,
-  },
-]
+interface Product {
+  _id: string
+  name: string
+  price: number
+  brand: string
+  category: {
+    _id: string
+    name: string
+  }
+  image?: string
+  rating: number
+  numReviews: number
+  countInStock: number
+  description: string
+}
+
+interface Category {
+  _id: string
+  name: string
+}
 
 export default function ShopPage() {
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [brandFilter, setBrandFilter] = useState<string[]>([])
@@ -114,12 +52,52 @@ export default function ShopPage() {
   const { addFavorite, removeFavorite, isFavorite } = useFavorites()
   const { toast } = useToast()
 
-  const brands = ["Apple", "Samsung", "Sony", "Canon", "Dell"]
+  // Fetch products and categories
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const [productsResponse, categoriesResponse] = await Promise.all([
+          productAPI.getAllProducts(),
+          categoryAPI.getAllCategories(),
+        ])
+
+        setProducts(productsResponse)
+        setCategories(categoriesResponse)
+
+        // Show info message if using mock data
+        if (isUsingMockData()) {
+          console.info("📱 Demo Mode: Using sample data for development")
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        setError("Failed to load products")
+
+        // Set fallback data
+        setProducts([])
+        setCategories([])
+
+        toast({
+          title: "Demo Mode",
+          description: "Using sample data for development.",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [toast])
+
+  // Get unique brands from products
+  const brands = [...new Set(products.map((product) => product.brand))].filter(Boolean)
 
   const filteredProducts = products
     .filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
+      const matchesCategory = categoryFilter === "all" || product.category?._id === categoryFilter
       const matchesBrand = brandFilter.length === 0 || brandFilter.includes(product.brand)
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1]
       return matchesSearch && matchesCategory && matchesBrand && matchesPrice
@@ -135,17 +113,17 @@ export default function ShopPage() {
         case "name":
           return a.name.localeCompare(b.name)
         default:
-          return b.featured ? 1 : -1
+          return 0
       }
     })
 
-  const handleAddToCart = (product: (typeof products)[0]) => {
+  const handleAddToCart = (product: Product) => {
     addItem({
-      id: product.id,
+      id: product._id,
       name: product.name,
       price: product.price,
       quantity: 1,
-      image: product.image,
+      image: product.image || "/placeholder.svg",
     })
 
     toast({
@@ -154,26 +132,24 @@ export default function ShopPage() {
     })
   }
 
-  const handleToggleFavorite = (product: (typeof products)[0]) => {
-    if (isFavorite(product.id)) {
-      removeFavorite(product.id)
+  const handleToggleFavorite = (product: Product) => {
+    if (isFavorite(product._id)) {
+      removeFavorite(product._id)
       toast({
         title: "Removed from Favorites",
         description: `${product.name} has been removed from your favorites.`,
       })
     } else {
       addFavorite({
-        id: product.id,
+        id: product._id,
         name: product.name,
         price: product.price,
-        originalPrice: product.originalPrice,
         brand: product.brand,
-        category: product.category,
-        image: product.image,
+        category: product.category?.name || "",
+        image: product.image || "/placeholder.svg",
         rating: product.rating,
-        reviews: product.reviews,
-        inStock: product.inStock,
-        discount: product.discount,
+        reviews: product.numReviews,
+        inStock: product.countInStock,
       })
       toast({
         title: "Added to Favorites",
@@ -186,6 +162,17 @@ export default function ShopPage() {
     setBrandFilter((prev) => (prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]))
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading products...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -193,6 +180,11 @@ export default function ShopPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Shop</h1>
           <p className="text-gray-600">Discover our latest collection of premium electronics</p>
+          {isUsingMockData() && (
+            <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
+              📱 Demo Mode - Sample Data
+            </div>
+          )}
         </div>
 
         {/* Search and Filters Bar */}
@@ -216,10 +208,11 @@ export default function ShopPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="laptops">Laptops</SelectItem>
-                <SelectItem value="phones">Phones</SelectItem>
-                <SelectItem value="cameras">Cameras</SelectItem>
-                <SelectItem value="audio">Audio</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category._id} value={category._id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -266,23 +259,25 @@ export default function ShopPage() {
           {showFilters && (
             <div className="mt-6 pt-6 border-t grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Brand Filter */}
-              <div>
-                <h3 className="font-semibold mb-3">Brand</h3>
-                <div className="space-y-2">
-                  {brands.map((brand) => (
-                    <div key={brand} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={brand}
-                        checked={brandFilter.includes(brand)}
-                        onCheckedChange={() => toggleBrandFilter(brand)}
-                      />
-                      <label htmlFor={brand} className="text-sm">
-                        {brand}
-                      </label>
-                    </div>
-                  ))}
+              {brands.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3">Brand</h3>
+                  <div className="space-y-2">
+                    {brands.map((brand) => (
+                      <div key={brand} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={brand}
+                          checked={brandFilter.includes(brand)}
+                          onCheckedChange={() => toggleBrandFilter(brand)}
+                        />
+                        <label htmlFor={brand} className="text-sm">
+                          {brand}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Price Range */}
               <div>
@@ -317,13 +312,13 @@ export default function ShopPage() {
         <div className={viewMode === "grid" ? "grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-4"}>
           {filteredProducts.map((product) => (
             <Card
-              key={product.id}
+              key={product._id}
               className={`group hover:shadow-xl transition-all duration-300 overflow-hidden ${
                 viewMode === "list" ? "flex flex-row" : ""
               }`}
             >
               <CardHeader className={`p-0 relative ${viewMode === "list" ? "w-48 flex-shrink-0" : ""}`}>
-                <Link href={`/product/${product.id}`}>
+                <Link href={`/product/${product._id}`}>
                   <img
                     src={product.image || "/placeholder.svg"}
                     alt={product.name}
@@ -332,23 +327,15 @@ export default function ShopPage() {
                     }`}
                   />
                 </Link>
-                {product.discount > 0 && (
-                  <Badge className="absolute top-3 left-3 bg-red-500 hover:bg-red-600">-{product.discount}%</Badge>
-                )}
-                {product.featured && (
-                  <Badge className="absolute top-3 right-3 bg-gradient-to-r from-purple-600 to-blue-600">
-                    Featured
-                  </Badge>
-                )}
                 <Button
                   variant="ghost"
                   size="sm"
                   className={`absolute bottom-3 right-3 bg-white/80 hover:bg-white transition-colors ${
-                    isFavorite(product.id) ? "text-red-500" : "text-gray-500 hover:text-red-500"
+                    isFavorite(product._id) ? "text-red-500" : "text-gray-500 hover:text-red-500"
                   }`}
                   onClick={() => handleToggleFavorite(product)}
                 >
-                  <Heart className={`h-4 w-4 ${isFavorite(product.id) ? "fill-current" : ""}`} />
+                  <Heart className={`h-4 w-4 ${isFavorite(product._id) ? "fill-current" : ""}`} />
                 </Button>
               </CardHeader>
 
@@ -356,7 +343,7 @@ export default function ShopPage() {
                 <CardContent className="p-4 flex-1">
                   <div className="space-y-2">
                     <p className="text-sm text-gray-500">{product.brand}</p>
-                    <Link href={`/product/${product.id}`}>
+                    <Link href={`/product/${product._id}`}>
                       <h3 className="font-semibold text-gray-900 hover:text-purple-600 transition-colors line-clamp-2">
                         {product.name}
                       </h3>
@@ -375,21 +362,18 @@ export default function ShopPage() {
                         ))}
                       </div>
                       <span className="text-sm text-gray-600">
-                        {product.rating} ({product.reviews})
+                        {product.rating} ({product.numReviews})
                       </span>
                     </div>
 
                     {/* Price */}
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-purple-600">${product.price}</span>
-                      {product.originalPrice > product.price && (
-                        <span className="text-sm text-gray-500 line-through">${product.originalPrice}</span>
-                      )}
                     </div>
 
                     {/* Stock Status */}
-                    <Badge variant={product.inStock > 0 ? "default" : "destructive"} className="text-xs">
-                      {product.inStock > 0 ? `${product.inStock} in stock` : "Out of stock"}
+                    <Badge variant={product.countInStock > 0 ? "default" : "destructive"} className="text-xs">
+                      {product.countInStock > 0 ? `${product.countInStock} in stock` : "Out of stock"}
                     </Badge>
                   </div>
                 </CardContent>
@@ -397,7 +381,7 @@ export default function ShopPage() {
                 <CardFooter className="p-4 pt-0">
                   <Button
                     onClick={() => handleAddToCart(product)}
-                    disabled={product.inStock === 0}
+                    disabled={product.countInStock === 0}
                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                   >
                     <ShoppingCart className="h-4 w-4 mr-2" />
@@ -409,13 +393,26 @@ export default function ShopPage() {
           ))}
         </div>
 
-        {filteredProducts.length === 0 && (
+        {filteredProducts.length === 0 && !loading && (
           <div className="text-center py-12">
             <div className="w-24 h-24 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <Search className="w-12 h-12 text-gray-400" />
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
             <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center py-12">
+            <div className="w-24 h-24 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <Search className="w-12 h-12 text-red-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Unable to load products</h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()} className="bg-purple-600 hover:bg-purple-700">
+              Try Again
+            </Button>
           </div>
         )}
       </div>

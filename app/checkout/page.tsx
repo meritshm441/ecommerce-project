@@ -12,7 +12,7 @@ import { CreditCard, Wallet, DollarSign } from "lucide-react"
 import { useCart } from "@/hooks/use-cart"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
-import { AuthStatus } from "@/components/auth-status"
+import AuthStatus from "@/components/auth-status"
 
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart()

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Eye, EyeOff } from "lucide-react"
+import { userAPI } from "@/lib/api"
 
 interface AuthModalsProps {
   isLoginOpen: boolean
@@ -57,18 +58,22 @@ function LoginModal({ isOpen, onClose, onSwitchToRegister }: LoginModalProps) {
     setIsLoading(true)
 
     try {
-      // Simulate authentication
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await userAPI.login({
+        email: formData.email,
+        password: formData.password,
+      })
 
-      // Set token in localStorage (simulated)
-      localStorage.setItem("userToken", "mock-jwt-token")
+      // Store user data in localStorage
+      localStorage.setItem("userToken", response._id)
+      localStorage.setItem("isAdmin", response.isAdmin.toString())
+      localStorage.setItem("userData", JSON.stringify(response))
 
       // Trigger storage event for other components
       window.dispatchEvent(new Event("storage"))
 
       toast({
         title: "Login Successful",
-        description: "Welcome back to Evershop!",
+        description: response.isAdmin ? "Welcome back, Admin!" : "Welcome back to Azushop!",
       })
 
       onClose()
@@ -79,10 +84,15 @@ function LoginModal({ isOpen, onClose, onSwitchToRegister }: LoginModalProps) {
         password: "",
         rememberMe: false,
       })
-    } catch (error) {
+
+      // Redirect admin to admin portal
+      if (response.isAdmin) {
+        window.location.href = "/admin"
+      }
+    } catch (error: any) {
       toast({
         title: "Login Failed",
-        description: "Invalid email or password. Please try again.",
+        description: error.message || "Invalid email or password. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -152,6 +162,7 @@ function LoginModal({ isOpen, onClose, onSwitchToRegister }: LoginModalProps) {
               Remember me
             </label>
           </div>
+
           <Button type="submit" className="w-full bg-[#009cde] hover:bg-[#01589a]" disabled={isLoading}>
             {isLoading ? "Logging in..." : "Login"}
           </Button>
@@ -179,8 +190,7 @@ interface RegisterModalProps {
 
 function RegisterModal({ isOpen, onClose, onSwitchToLogin }: RegisterModalProps) {
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -206,12 +216,15 @@ function RegisterModal({ isOpen, onClose, onSwitchToLogin }: RegisterModalProps)
     }
 
     try {
-      // Simulate registration
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await userAPI.register({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+      })
 
       toast({
         title: "Registration Successful",
-        description: "Your account has been created successfully!",
+        description: "Your account has been created successfully! You can now log in.",
       })
 
       onClose()
@@ -219,16 +232,15 @@ function RegisterModal({ isOpen, onClose, onSwitchToLogin }: RegisterModalProps)
 
       // Reset form
       setFormData({
-        firstName: "",
-        lastName: "",
+        username: "",
         email: "",
         password: "",
         confirmPassword: "",
       })
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Registration Failed",
-        description: "There was a problem creating your account. Please try again.",
+        description: error.message || "There was a problem creating your account. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -249,27 +261,15 @@ function RegisterModal({ isOpen, onClose, onSwitchToLogin }: RegisterModalProps)
           <DialogDescription className="text-center">Enter your information to create an account</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
-              <Input
-                id="firstName"
-                placeholder="John"
-                value={formData.firstName}
-                onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input
-                id="lastName"
-                placeholder="Doe"
-                value={formData.lastName}
-                onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value }))}
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              placeholder="johndoe"
+              value={formData.username}
+              onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
