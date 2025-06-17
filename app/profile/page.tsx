@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { User, Package, MapPin, CreditCard, Bell, Shield, Eye } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { AuthModals } from "@/components/auth-modals"
 
 const orderHistory = [
   {
@@ -59,6 +60,7 @@ const addresses = [
 
 export default function ProfilePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [userInfo, setUserInfo] = useState({
     firstName: "John",
     lastName: "Doe",
@@ -88,8 +90,20 @@ export default function ProfilePage() {
             <CardTitle className="text-2xl">Login Required</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-gray-600">Please log in to access your profile.</p>
-            <Button className="w-full bg-purple-600 hover:bg-purple-700">Login</Button>
+            <p className="text-gray-600">Please log in to your account to access your profile.</p>
+            <Button onClick={() => setIsLoginOpen(true)} className="w-full bg-purple-600 hover:bg-purple-700">
+              Login
+            </Button>
+
+            {/* Import the AuthModals component */}
+            <AuthModals
+              isLoginOpen={isLoginOpen}
+              isRegisterOpen={false}
+              onLoginClose={() => setIsLoginOpen(false)}
+              onRegisterClose={() => {}}
+              onSwitchToRegister={() => {}}
+              onSwitchToLogin={() => {}}
+            />
           </CardContent>
         </Card>
       </div>

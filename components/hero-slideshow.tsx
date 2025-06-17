@@ -140,9 +140,9 @@ export function HeroSlideshow() {
       {/* Foreground Content */}
       <div className="relative z-10 h-full flex items-center">
         <div className="container mx-auto px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center h-full">
+          <div className="flex  gap-12 items-center justify-center h-full">
             {/* Text Content */}
-            <div className="space-y-6 text-white">
+            <div className="space-y-6 text-white ">
               <div className="space-y-2">
                 <p className="text-lg font-medium opacity-90 animate-fade-in">
                   {currentSlideData.subtitle}
