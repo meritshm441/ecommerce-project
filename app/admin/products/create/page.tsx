@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,6 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card"
 import { ChevronLeft, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { productAPI, categoryAPI } from "@/lib/api"
+import { useEffect } from "react"
+
+interface Category {
+  _id: string
+  name: string
+}
 
 export default function CreateProductPage() {
   const [formData, setFormData] = useState({
@@ -18,39 +26,82 @@ export default function CreateProductPage() {
     price: "",
     quantity: "",
     brand: "",
-    countInStock: "",
     category: "",
     description: "",
-    image: null as File | null,
   })
+  const [image, setImage] = useState<File | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+  const router = useRouter()
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await categoryAPI.getAllCategories()
+        setCategories(response)
+      } catch (error) {
+        console.error("Error fetching categories:", error)
+      }
+    }
+
+    fetchCategories()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsLoading(true)
 
-    // Simulate product creation
-    toast({
-      title: "Product Created",
-      description: "Your product has been successfully created.",
-    })
+    try {
+      // Create FormData for file upload
+      const productData = new FormData()
+      productData.append("name", formData.name)
+      productData.append("price", formData.price)
+      productData.append("quantity", formData.quantity)
+      productData.append("brand", formData.brand)
+      productData.append("category", formData.category)
+      productData.append("description", formData.description)
 
-    // Reset form
-    setFormData({
-      name: "",
-      price: "",
-      quantity: "",
-      brand: "",
-      countInStock: "",
-      category: "",
-      description: "",
-      image: null,
-    })
+      if (image) {
+        productData.append("image", image)
+      }
+
+      await productAPI.createProduct(productData)
+
+      toast({
+        title: "Product Created",
+        description: "Your product has been successfully created.",
+      })
+
+      // Reset form
+      setFormData({
+        name: "",
+        price: "",
+        quantity: "",
+        brand: "",
+        category: "",
+        description: "",
+      })
+      setImage(null)
+
+      // Redirect to products page
+      router.push("/admin/products")
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create product. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setFormData((prev) => ({ ...prev, image: file }))
+      setImage(file)
     }
   }
 
@@ -90,7 +141,7 @@ export default function CreateProductPage() {
                     Choose file
                   </Button>
                 </label>
-                {formData.image && <p className="mt-2 text-sm text-[#666666]">{formData.image.name}</p>}
+                {image && <p className="mt-2 text-sm text-[#666666]">{image.name}</p>}
               </div>
             </CardContent>
           </Card>
@@ -133,15 +184,7 @@ export default function CreateProductPage() {
             />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <Input
-              placeholder="Count in stock"
-              type="number"
-              value={formData.countInStock}
-              onChange={(e) => setFormData((prev) => ({ ...prev, countInStock: e.target.value }))}
-              className="bg-[#e6eff5] border-0 placeholder:text-[#999999] h-12"
-              required
-            />
+          <div className="grid md:grid-cols-1 gap-6">
             <Select
               value={formData.category}
               onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
@@ -150,11 +193,11 @@ export default function CreateProductPage() {
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="electronics">Electronics</SelectItem>
-                <SelectItem value="clothing">Clothing</SelectItem>
-                <SelectItem value="books">Books</SelectItem>
-                <SelectItem value="home">Home & Garden</SelectItem>
-                <SelectItem value="sports">Sports</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category._id} value={category._id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -167,8 +210,12 @@ export default function CreateProductPage() {
             required
           />
 
-          <Button type="submit" className="bg-[#003087] hover:bg-[#172b85] text-white w-full md:w-auto px-12 py-3 h-12">
-            Submit
+          <Button
+            type="submit"
+            className="bg-[#003087] hover:bg-[#172b85] text-white w-full md:w-auto px-12 py-3 h-12"
+            disabled={isLoading}
+          >
+            {isLoading ? "Creating..." : "Submit"}
           </Button>
         </form>
       </div>

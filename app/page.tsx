@@ -31,7 +31,7 @@ export default function HomePage() {
                   <p className="text-lg text-gray-600">Up to 50% off laptop</p>
                   <div className="flex justify-center py-8">
                     <img
-                      src={macBookProM3Max}
+                      src={macBookProM3Max || "/placeholder.svg"}
                       alt="MacBook"
                       className="w-full max-w-xs group-hover:scale-105 transition-transform duration-300"
                     />
@@ -57,7 +57,7 @@ export default function HomePage() {
                   <p className="text-lg text-gray-600">Free shipping</p>
                   <div className="flex justify-center py-8">
                     <img
-                      src={iPhone14Pro}
+                      src={iPhone14Pro || "/placeholder.svg"}
                       alt="iPhone"
                       className="w-full max-w-xs group-hover:scale-105 transition-transform duration-300"
                     />
@@ -83,7 +83,7 @@ export default function HomePage() {
                   <p className="text-lg text-gray-600">Up to 40% off Camera</p>
                   <div className="flex justify-center py-8">
                     <img
-                      src={canonEosR5}
+                      src={canonEosR5 || "/placeholder.svg"}
                       alt="Digital Camera"
                       className="w-full max-w-xs group-hover:scale-105 transition-transform duration-300"
                     />
