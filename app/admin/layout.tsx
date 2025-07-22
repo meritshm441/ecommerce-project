@@ -4,278 +4,130 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-  LayoutDashboard,
-  Package,
-  ShoppingCart,
-  Users,
-  BarChart3,
-  Settings,
-  Tag,
-  Star,
-  Warehouse,
-  Menu,
-  X,
-  Home,
-} from "lucide-react"
-import { userAPI, productAPI, orderAPI, categoryAPI } from "@/lib/api"
+import { sessionManager } from "@/lib/api"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Shield, AlertTriangle } from "lucide-react"
 
-interface SidebarCounts {
-  pendingOrders: number
-  lowStockProducts: number
-  totalProducts: number
-  totalCustomers: number
-  totalCategories: number
-  pendingReviews: number
-}
-
-const navigation = [
-  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { name: "Products", href: "/admin/products", icon: Package, countKey: "totalProducts" as keyof SidebarCounts },
-  { name: "Orders", href: "/admin/orders", icon: ShoppingCart, countKey: "pendingOrders" as keyof SidebarCounts },
-  { name: "Customers", href: "/admin/customers", icon: Users, countKey: "totalCustomers" as keyof SidebarCounts },
-  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { name: "Categories", href: "/admin/categories", icon: Tag, countKey: "totalCategories" as keyof SidebarCounts },
-  { name: "Inventory", href: "/admin/inventory", icon: Warehouse, countKey: "lowStockProducts" as keyof SidebarCounts },
-  { name: "Reviews", href: "/admin/reviews", icon: Star, countKey: "pendingReviews" as keyof SidebarCounts },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
-]
-
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const pathname = usePathname()
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [counts, setCounts] = useState<SidebarCounts>({
-    pendingOrders: 0,
-    lowStockProducts: 0,
-    totalProducts: 0,
-    totalCustomers: 0,
-    totalCategories: 0,
-    pendingReviews: 0,
-  })
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const checkAdminAccess = () => {
       try {
-        const token = localStorage.getItem("userToken")
-        if (!token) {
-          router.push("/")
+        console.log("🔍 Checking admin access...")
+
+        // Get session data
+        const session = sessionManager.getSession()
+
+        if (!session || !session.userData) {
+          console.log("❌ No valid session found, redirecting to login")
+          setError("Please log in to access the admin panel")
+          setTimeout(() => router.push("/"), 2000)
           return
         }
 
-        // Check if user is admin
-        const profile = await userAPI.getProfile()
-        if (!profile.isAdmin) {
-          router.push("/")
+        if (!session.userData.isAdmin) {
+          console.log("❌ User is not an admin, redirecting to home")
+          setError("You don't have permission to access the admin panel")
+          setTimeout(() => router.push("/"), 2000)
           return
         }
 
-        setIsAdmin(true)
-        await loadSidebarCounts()
+        console.log("✅ Admin access granted for:", session.userData.email)
+        setIsAuthorized(true)
       } catch (error) {
-        console.error("Error checking admin status:", error)
-        router.push("/")
+        console.error("❌ Admin access check failed:", error)
+        setError("Failed to verify admin access")
+        setTimeout(() => router.push("/"), 2000)
       } finally {
         setIsLoading(false)
       }
     }
 
-    checkAdminStatus()
+    checkAdminAccess()
 
-    // Listen for storage events
-    window.addEventListener("storage", checkAdminStatus)
-    return () => window.removeEventListener("storage", checkAdminStatus)
+    // Listen for auth state changes
+    const handleAuthStateChange = (event: CustomEvent) => {
+      const { user } = event.detail
+      if (!user || !user.isAdmin) {
+        console.log("🔒 Admin access revoked, redirecting...")
+        setIsAuthorized(false)
+        router.push("/")
+      }
+    }
+
+    const handleLogout = () => {
+      console.log("👋 Logout detected in admin panel")
+      setIsAuthorized(false)
+      router.push("/")
+    }
+
+    window.addEventListener("authStateChange", handleAuthStateChange as EventListener)
+    window.addEventListener("logout", handleLogout)
+
+    return () => {
+      window.removeEventListener("authStateChange", handleAuthStateChange as EventListener)
+      window.removeEventListener("logout", handleLogout)
+    }
   }, [router])
 
-  const loadSidebarCounts = async () => {
-    try {
-      // Load all data in parallel
-      const [products, orders, users, categories] = await Promise.all([
-        productAPI.getAllProducts().catch(() => []),
-        orderAPI.getAllOrders().catch(() => []),
-        userAPI.getAllUsers().catch(() => []),
-        categoryAPI.getAllCategories().catch(() => []),
-      ])
-
-      const productsArray = Array.isArray(products) ? products : []
-      const ordersArray = Array.isArray(orders) ? orders : []
-      const usersArray = Array.isArray(users) ? users : []
-      const categoriesArray = Array.isArray(categories) ? categories : []
-
-      // Calculate counts
-      const pendingOrders = ordersArray.filter((order: any) => !order.isPaid).length
-      const lowStockProducts = productsArray.filter(
-        (product: any) => (product.countInStock || 0) < 10 && (product.countInStock || 0) > 0,
-      ).length
-      const totalProducts = productsArray.length
-      const totalCustomers = usersArray.filter((user: any) => !user.isAdmin).length
-      const totalCategories = categoriesArray.length
-      const pendingReviews = 0 // Mock data - implement when reviews API is available
-
-      setCounts({
-        pendingOrders,
-        lowStockProducts,
-        totalProducts,
-        totalCustomers,
-        totalCategories,
-        pendingReviews,
-      })
-    } catch (error) {
-      console.error("Error loading sidebar counts:", error)
-    }
-  }
-
-  // Refresh counts every 30 seconds
-  useEffect(() => {
-    if (isAdmin) {
-      const interval = setInterval(loadSidebarCounts, 30000)
-      return () => clearInterval(interval)
-    }
-  }, [isAdmin])
-
-  const getBadgeVariant = (item: any, count: number) => {
-    // Special styling for urgent items
-    if (item.countKey === "pendingOrders" && count > 0) {
-      return "destructive" // Red for pending orders
-    }
-    if (item.countKey === "lowStockProducts" && count > 0) {
-      return "secondary" // Orange/yellow for low stock
-    }
-    if (item.countKey === "pendingReviews" && count > 0) {
-      return "destructive" // Red for pending reviews
-    }
-    return "default" // Default blue for counts
-  }
-
-  const shouldShowBadge = (item: any, count: number) => {
-    // Only show badges for items that need attention or have meaningful counts
-    if (item.countKey === "pendingOrders") return count > 0 // Only show if there are pending orders
-    if (item.countKey === "lowStockProducts") return count > 0 // Only show if there are low stock items
-    if (item.countKey === "pendingReviews") return count > 0 // Only show if there are pending reviews
-    if (item.countKey === "totalProducts") return count > 0 // Show product count if any exist
-    if (item.countKey === "totalCustomers") return count > 0 // Show customer count if any exist
-    if (item.countKey === "totalCategories") return count > 0 // Show category count if any exist
-    return false
-  }
-
+  // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f9fbfc] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#009cde] mx-auto mb-4"></div>
-          <p className="text-[#666666]">Loading admin portal...</p>
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-3 mb-8">
+            <Skeleton className="h-8 w-8" />
+            <Skeleton className="h-8 w-48" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+          <Skeleton className="h-96 w-full" />
         </div>
       </div>
     )
   }
 
-  if (!isAdmin) {
-    return null
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
+        <div className="max-w-md w-full">
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-center">
+              <div className="font-semibold mb-2">Access Denied</div>
+              {error}
+              <div className="text-sm mt-2 opacity-75">Redirecting...</div>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    )
   }
 
-  return (
-    <div className="flex h-screen bg-[#f9fbfc] overflow-hidden">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 flex-shrink-0">
-            <Link href="/admin" className="text-xl font-bold text-[#000000]">
-              Admin Portal
-            </Link>
-            <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))
-              const count = item.countKey ? counts[item.countKey] : 0
-              const showBadge = item.countKey ? shouldShowBadge(item, count) : false
-
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive ? "bg-[#009cde] text-white" : "text-[#666666] hover:bg-[#e6eff5] hover:text-[#000000]"
-                  }`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <div className="flex items-center">
-                    <item.icon className="h-5 w-5 mr-3" />
-                    {item.name}
-                  </div>
-                  {showBadge && (
-                    <Badge
-                      variant={getBadgeVariant(item, count)}
-                      className={`text-xs ${
-                        item.countKey === "pendingOrders"
-                          ? "bg-red-500 hover:bg-red-600 text-white"
-                          : item.countKey === "lowStockProducts"
-                            ? "bg-orange-500 hover:bg-orange-600 text-white"
-                            : item.countKey === "pendingReviews"
-                              ? "bg-red-500 hover:bg-red-600 text-white"
-                              : ""
-                      }`}
-                    >
-                      {count > 99 ? "99+" : count}
-                    </Badge>
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* Back to Store */}
-          <div className="p-4 border-t border-gray-200 flex-shrink-0">
-            <Link href="/">
-              <Button variant="ghost" className="w-full justify-start text-[#666666] hover:text-[#000000]">
-                <Home className="h-5 w-5 mr-3" />
-                Back to Store
-              </Button>
-            </Link>
+  // Authorized admin user
+  if (isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white border-b border-gray-200 px-8 py-4">
+          <div className="flex items-center gap-3">
+            <Shield className="h-6 w-6 text-purple-600" />
+            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
           </div>
         </div>
+        <div className="p-8">{children}</div>
       </div>
+    )
+  }
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile header */}
-        <div className="lg:hidden flex items-center justify-between h-16 px-4 bg-white border-b border-gray-200 flex-shrink-0">
-          <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </Button>
-          <h1 className="text-lg font-semibold text-[#000000]">Admin Portal</h1>
-          <div className="w-10" /> {/* Spacer */}
-        </div>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6">{children}</div>
-        </main>
-      </div>
-    </div>
-  )
+  // Fallback
+  return null
 }

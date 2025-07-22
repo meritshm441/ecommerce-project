@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Checkbox } from "@/components/ui/checkbox"
-import { useToast } from "@/hooks/use-toast"
-import { Eye, EyeOff } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, Eye, EyeOff, Mail, Lock, User } from "lucide-react"
 import { userAPI } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 interface AuthModalsProps {
   isLoginOpen: boolean
@@ -29,419 +29,358 @@ export function AuthModals({
   onSwitchToRegister,
   onSwitchToLogin,
 }: AuthModalsProps) {
-  return (
-    <>
-      <LoginModal isOpen={isLoginOpen} onClose={onLoginClose} onSwitchToRegister={onSwitchToRegister} />
-      <RegisterModal isOpen={isRegisterOpen} onClose={onRegisterClose} onSwitchToLogin={onSwitchToLogin} />
-    </>
-  )
-}
-
-interface LoginModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSwitchToRegister: () => void
-}
-
-function LoginModal({ isOpen, onClose, onSwitchToRegister }: LoginModalProps) {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    rememberMe: false,
-  })
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Login state
+  const [loginData, setLoginData] = useState({ email: "", password: "" })
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError, setLoginError] = useState("")
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+
+  // Register state
+  const [registerData, setRegisterData] = useState({ username: "", email: "", password: "", confirmPassword: "" })
+  const [registerLoading, setRegisterLoading] = useState(false)
+  const [registerError, setRegisterError] = useState("")
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  // Handle login
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setLoginLoading(true)
+    setLoginError("")
 
     try {
+      console.log("🔐 Attempting login for:", loginData.email)
+
+      if (!loginData.email || !loginData.password) {
+        throw new Error("Please fill in all fields")
+      }
+
       const response = await userAPI.login({
-        email: formData.email,
-        password: formData.password,
+        email: loginData.email.trim(),
+        password: loginData.password,
       })
 
-      // Store user data in localStorage
-      localStorage.setItem("userToken", response._id)
-      localStorage.setItem("isAdmin", response.isAdmin.toString())
-      localStorage.setItem("userData", JSON.stringify(response))
+      console.log("✅ Login successful:", response)
 
-      // Trigger storage event for other components
-      window.dispatchEvent(new Event("storage"))
-
+      // Show success message
       toast({
         title: "Login Successful",
-        description: response.isAdmin ? "Welcome back, Admin!" : "Welcome back to Azushop!",
+        description: `Welcome back, ${response.user?.username || response.user?.name || "User"}!`,
       })
-
-      onClose()
 
       // Reset form
-      setFormData({
-        email: "",
-        password: "",
-        rememberMe: false,
-      })
+      setLoginData({ email: "", password: "" })
+      onLoginClose()
 
-      // Redirect admin to admin portal
-      if (response.isAdmin) {
+      // Redirect based on user role
+      if (response.user?.isAdmin) {
         window.location.href = "/admin"
+      } else {
+        window.location.href = "/"
       }
     } catch (error: any) {
+      console.error("❌ Login failed:", error)
+      setLoginError(error.message || "Login failed. Please try again.")
+
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password. Please try again.",
+        description: error.message || "Please check your credentials and try again.",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setLoginLoading(false)
     }
   }
 
-  const handleSwitchToRegister = () => {
-    onClose()
-    onSwitchToRegister()
-  }
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-center">Login</DialogTitle>
-          <DialogDescription className="text-center">Enter your credentials to access your account</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <ForgotPasswordModal />
-            </div>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                required
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="remember"
-              checked={formData.rememberMe}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, rememberMe: checked as boolean }))}
-            />
-            <label
-              htmlFor="remember"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Remember me
-            </label>
-          </div>
-
-          <Button type="submit" className="w-full bg-[#009cde] hover:bg-[#01589a]" disabled={isLoading}>
-            {isLoading ? "Logging in..." : "Login"}
-          </Button>
-          <p className="text-center text-sm text-[#666666]">
-            Don&apos;t have an account?{" "}
-            <button
-              type="button"
-              onClick={handleSwitchToRegister}
-              className="text-[#009cde] hover:text-[#01589a] hover:underline"
-            >
-              Register
-            </button>
-          </p>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-interface RegisterModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSwitchToLogin: () => void
-}
-
-function RegisterModal({ isOpen, onClose, onSwitchToLogin }: RegisterModalProps) {
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  })
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle register
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match.",
-        variant: "destructive",
-      })
-      setIsLoading(false)
-      return
-    }
+    setRegisterLoading(true)
+    setRegisterError("")
 
     try {
+      console.log("📝 Attempting registration for:", registerData.email)
+
+      // Validation
+      if (!registerData.username || !registerData.email || !registerData.password || !registerData.confirmPassword) {
+        throw new Error("Please fill in all fields")
+      }
+
+      if (registerData.password !== registerData.confirmPassword) {
+        throw new Error("Passwords do not match")
+      }
+
+      if (registerData.password.length < 6) {
+        throw new Error("Password must be at least 6 characters long")
+      }
+
       const response = await userAPI.register({
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
+        username: registerData.username.trim(),
+        email: registerData.email.trim(),
+        password: registerData.password,
       })
 
+      console.log("✅ Registration successful:", response)
+
+      // Show success message
       toast({
         title: "Registration Successful",
-        description: "Your account has been created successfully! You can now log in.",
+        description: `Welcome to Azushop, ${response.user?.username || registerData.username}!`,
       })
-
-      onClose()
-      onSwitchToLogin()
 
       // Reset form
-      setFormData({
-        username: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-      })
+      setRegisterData({ username: "", email: "", password: "", confirmPassword: "" })
+      onRegisterClose()
+
+      // Redirect to home page (user is automatically logged in)
+      window.location.href = "/"
     } catch (error: any) {
+      console.error("❌ Registration failed:", error)
+      setRegisterError(error.message || "Registration failed. Please try again.")
+
       toast({
         title: "Registration Failed",
-        description: error.message || "There was a problem creating your account. Please try again.",
+        description: error.message || "Please check your information and try again.",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setRegisterLoading(false)
     }
   }
 
-  const handleSwitchToLogin = () => {
-    onClose()
-    onSwitchToLogin()
+  // Reset forms when modals close
+  const handleLoginClose = () => {
+    setLoginData({ email: "", password: "" })
+    setLoginError("")
+    setShowLoginPassword(false)
+    onLoginClose()
   }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-center">Create an Account</DialogTitle>
-          <DialogDescription className="text-center">Enter your information to create an account</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              placeholder="johndoe"
-              value={formData.username}
-              onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                required
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                required
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-          <p className="text-xs text-[#666666]">
-            By registering, you agree to our{" "}
-            <button type="button" className="text-[#009cde] hover:text-[#01589a] hover:underline">
-              Terms of Service
-            </button>{" "}
-            and{" "}
-            <button type="button" className="text-[#009cde] hover:text-[#01589a] hover:underline">
-              Privacy Policy
-            </button>
-            .
-          </p>
-          <Button type="submit" className="w-full bg-[#009cde] hover:bg-[#01589a]" disabled={isLoading}>
-            {isLoading ? "Creating Account..." : "Register"}
-          </Button>
-          <p className="text-center text-sm text-[#666666]">
-            Already have an account?{" "}
-            <button
-              type="button"
-              onClick={handleSwitchToLogin}
-              className="text-[#009cde] hover:text-[#01589a] hover:underline"
-            >
-              Login
-            </button>
-          </p>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function ForgotPasswordModal() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [email, setEmail] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const { toast } = useToast()
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      // Simulate password reset request
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      setIsSubmitted(true)
-      toast({
-        title: "Reset Link Sent",
-        description: "If an account exists with this email, you'll receive a password reset link.",
-      })
-    } catch (error) {
-      toast({
-        title: "Request Failed",
-        description: "There was a problem sending the reset link. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleClose = () => {
-    setIsOpen(false)
-    setEmail("")
-    setIsSubmitted(false)
-    setIsLoading(false)
+  const handleRegisterClose = () => {
+    setRegisterData({ username: "", email: "", password: "", confirmPassword: "" })
+    setRegisterError("")
+    setShowRegisterPassword(false)
+    setShowConfirmPassword(false)
+    onRegisterClose()
   }
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="text-sm text-[#009cde] hover:text-[#01589a] hover:underline"
-      >
-        Forgot password?
-      </button>
-      <Dialog open={isOpen} onOpenChange={handleClose}>
+      {/* Login Modal */}
+      <Dialog open={isLoginOpen} onOpenChange={handleLoginClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-center">Forgot Password</DialogTitle>
-            <DialogDescription className="text-center">
-              Enter your email and we&apos;ll send you a link to reset your password
-            </DialogDescription>
+            <DialogTitle className="text-2xl font-bold text-center">Welcome Back</DialogTitle>
+            <DialogDescription className="text-center">Sign in to your Azushop account</DialogDescription>
           </DialogHeader>
 
-          {!isSubmitted ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+          <form onSubmit={handleLogin} className="space-y-4">
+            {loginError && (
+              <Alert variant="destructive">
+                <AlertDescription>{loginError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="login-email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  id="email"
+                  id="login-email"
                   type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  value={loginData.email}
+                  onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                  className="pl-10"
                   required
+                  disabled={loginLoading}
                 />
               </div>
-              <Button type="submit" className="w-full bg-[#009cde] hover:bg-[#01589a]" disabled={isLoading}>
-                {isLoading ? "Sending..." : "Send Reset Link"}
-              </Button>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 text-green-800 rounded-md p-4">
-                <p className="text-center text-sm">
-                  If an account exists with the email <strong>{email}</strong>, you&apos;ll receive a password reset
-                  link shortly.
-                </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="login-password"
+                  type={showLoginPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={loginData.password}
+                  onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                  className="pl-10 pr-10"
+                  required
+                  disabled={loginLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  disabled={loginLoading}
+                >
+                  {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
               </div>
-              <Button onClick={handleClose} className="w-full bg-[#009cde] hover:bg-[#01589a]">
-                Close
+            </div>
+
+            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={loginLoading}>
+              {loginLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+
+            <div className="text-center text-sm">
+              <span className="text-muted-foreground">{"Don't have an account? "}</span>
+              <Button
+                type="button"
+                variant="link"
+                className="p-0 h-auto font-semibold text-purple-600 hover:text-purple-700"
+                onClick={onSwitchToRegister}
+                disabled={loginLoading}
+              >
+                Sign up
               </Button>
             </div>
-          )}
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Register Modal */}
+      <Dialog open={isRegisterOpen} onOpenChange={handleRegisterClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-center">Create Account</DialogTitle>
+            <DialogDescription className="text-center">Join Azushop and start shopping</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleRegister} className="space-y-4">
+            {registerError && (
+              <Alert variant="destructive">
+                <AlertDescription>{registerError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="register-username">Username</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="register-username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={registerData.username}
+                  onChange={(e) => setRegisterData({ ...registerData, username: e.target.value })}
+                  className="pl-10"
+                  required
+                  disabled={registerLoading}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="register-email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="register-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                  className="pl-10"
+                  required
+                  disabled={registerLoading}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="register-password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="register-password"
+                  type={showRegisterPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={registerData.password}
+                  onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                  className="pl-10 pr-10"
+                  required
+                  disabled={registerLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                  disabled={registerLoading}
+                >
+                  {showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="register-confirm-password">Confirm Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="register-confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm your password"
+                  value={registerData.confirmPassword}
+                  onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                  className="pl-10 pr-10"
+                  required
+                  disabled={registerLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  disabled={registerLoading}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={registerLoading}>
+              {registerLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+
+            <div className="text-center text-sm">
+              <span className="text-muted-foreground">Already have an account? </span>
+              <Button
+                type="button"
+                variant="link"
+                className="p-0 h-auto font-semibold text-purple-600 hover:text-purple-700"
+                onClick={onSwitchToLogin}
+                disabled={registerLoading}
+              >
+                Sign in
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </>
